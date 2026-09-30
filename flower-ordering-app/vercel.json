@@ -1,0 +1,17 @@
+{
+  "buildCommand": "next build",
+  "devCommand": "next dev",
+  "installCommand": "npm install",
+  "framework": "nextjs",
+  "env": {
+    "FRAPPE_URL": {
+      "description": "Your ERPNext instance URL (e.g., https://your-erpnext-instance.com)"
+    },
+    "FRAPPE_API_KEY": {
+      "description": "Your Frappe API key"
+    },
+    "FRAPPE_API_SECRET": {
+      "description": "Your Frappe API secret"
+    }
+  }
+}
