@@ -34,6 +34,38 @@ export default async function handler(req, res) {
 
     // Route-specific handling. Only POST/PUT requests get a body -
     // GET requests must not have one (Node fetch rejects them).
+    if (action === 'raw') {
+      // Pass-through used by the flower ordering app: { method, path, body, query }.
+      // `path` is relative to /api (e.g. "/resource/Purchase Order",
+      // "/method/frappe.auth.get_logged_user"). Always answers HTTP 200 with
+      // { ok, status, data } so the page can show ERPNext's own message.
+      const { method = 'GET', path, body: rawBody, query } = req.body || {};
+      if (typeof path !== 'string' || !path.startsWith('/') || path.includes('..')) {
+        return res.status(400).json({ ok: false, status: 400, data: { message: 'Invalid path' } });
+      }
+      const m = String(method).toUpperCase();
+      if (!['GET', 'POST', 'PUT', 'DELETE'].includes(m)) {
+        return res.status(400).json({ ok: false, status: 400, data: { message: 'Invalid method' } });
+      }
+      url = `${baseUrl}/api${path}`;
+      if (query && typeof query === 'object') {
+        const params = new URLSearchParams();
+        Object.entries(query).forEach(([k, v]) => params.append(k, typeof v === 'string' ? v : JSON.stringify(v)));
+        const qs = params.toString();
+        if (qs) url += (url.includes('?') ? '&' : '?') + qs;
+      }
+      options.method = m;
+      if (m !== 'GET' && rawBody !== undefined) {
+        options.headers['Content-Type'] = 'application/json';
+        options.body = JSON.stringify(rawBody);
+      }
+      const response = await fetch(url, options);
+      const text = await response.text();
+      let data;
+      try { data = JSON.parse(text); } catch { data = { message: text.slice(0, 500) }; }
+      return res.status(200).json({ ok: response.ok, status: response.status, data });
+    }
+
     if (action === 'query') {
       // GET a list of documents; filters/fields go in the query string
       url = `${baseUrl}/api/resource/${encodeURIComponent(endpoint)}`;
@@ -102,3 +134,6 @@ export default async function handler(req, res) {
     });
   }
 }
+
+// Refresh runs several SQL queries; give each call more than the 10 s default.
+export const config = { maxDuration: 60, api: { responseLimit: '50mb' } };
