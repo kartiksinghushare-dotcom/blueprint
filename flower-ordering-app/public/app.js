@@ -157,46 +157,103 @@ function setupEventListeners() {
  * Load data from ERPNext
  */
 async function loadData() {
-  try {
-    // Example: Load items
-    const itemsResponse = await callFrappeAPI('query', 'Item', {
+  const view = document.getElementById('view');
+  if (view) view.innerHTML = '<div class="hint">Loading from ERPNext...</div>';
+
+  // Each query runs independently: one failing must not blank the others.
+  const [itemsResult, stockResult] = await Promise.allSettled([
+    callFrappeAPI('query', 'Item', {
       filters: [['disabled', '=', 0]],
       limit_page_length: 100,
-      fields: ['name', 'item_name', 'item_group'],
-    });
-
-    if (itemsResponse.data) {
-      console.log('Loaded items:', itemsResponse.data.length);
-      updateUI('Items loaded: ' + itemsResponse.data.length);
-    }
-
-    // Example: Load stock
-    const stockResponse = await callFrappeAPI('query', 'Stock Entry', {
+      fields: ['name', 'item_name', 'item_group', 'stock_uom'],
+      order_by: 'item_name asc',
+    }),
+    callFrappeAPI('query', 'Stock Entry', {
       filters: [['docstatus', '=', 1]],
       limit_page_length: 50,
-      fields: ['name', 'posting_date', 'total_qty'],
-    });
+      fields: ['name', 'posting_date', 'stock_entry_type', 'purpose'],
+      order_by: 'posting_date desc',
+    }),
+  ]);
 
-    if (stockResponse.data) {
-      console.log('Loaded stock entries:', stockResponse.data.length);
-    }
+  const items = itemsResult.status === 'fulfilled' ? (itemsResult.value.data || []) : [];
+  const stock = stockResult.status === 'fulfilled' ? (stockResult.value.data || []) : [];
+  const errors = [itemsResult, stockResult]
+    .filter((r) => r.status === 'rejected')
+    .map((r) => r.reason?.message || String(r.reason));
 
+  console.log('Loaded items:', items.length, 'stock entries:', stock.length);
+  renderData(items, stock);
+
+  const meta = document.getElementById('snapMeta');
+  if (meta) meta.textContent = `Snapshot ${new Date().toLocaleString()}`;
+
+  if (errors.length) {
+    showError('Some data failed to load: ' + errors.join(' | '));
+    showStatus('⚠ Partially loaded from ERPNext');
+  } else {
     showStatus('✓ Data loaded from ERPNext');
-
-  } catch (error) {
-    console.error('Failed to load data:', error);
-    showError('Failed to load data: ' + error.message);
   }
 }
 
 /**
- * Update UI with information
+ * Render items and stock entries into the view
  */
-function updateUI(message) {
+function renderData(items, stock) {
   const view = document.getElementById('view');
-  if (view) {
-    view.innerHTML += `<div class="hint">${message}</div>`;
+  const strip = document.getElementById('strip');
+  if (!view) return;
+
+  if (strip) {
+    strip.innerHTML = `
+      <div class="hint"><b>${items.length}</b> active items · <b>${stock.length}</b> recent stock entries</div>
+    `;
   }
+
+  const itemRows = items.map((it) => `
+    <tr>
+      <td>${esc(it.item_name || it.name)}</td>
+      <td class="meta">${esc(it.name)}</td>
+      <td>${esc(it.item_group || '')}</td>
+      <td>${esc(it.stock_uom || '')}</td>
+    </tr>`).join('');
+
+  const stockRows = stock.map((se) => `
+    <tr>
+      <td class="meta">${esc(se.name)}</td>
+      <td>${esc(se.posting_date || '')}</td>
+      <td>${esc(se.stock_entry_type || se.purpose || '')}</td>
+    </tr>`).join('');
+
+  view.innerHTML = `
+    <section class="card">
+      <h2>Items</h2>
+      ${items.length ? `
+        <table class="grid">
+          <thead><tr><th>Item</th><th>Code</th><th>Group</th><th>UOM</th></tr></thead>
+          <tbody>${itemRows}</tbody>
+        </table>` : '<div class="hint">No active items found.</div>'}
+    </section>
+    <section class="card">
+      <h2>Recent stock entries</h2>
+      ${stock.length ? `
+        <table class="grid">
+          <thead><tr><th>Entry</th><th>Date</th><th>Type</th></tr></thead>
+          <tbody>${stockRows}</tbody>
+        </table>` : '<div class="hint">No submitted stock entries found.</div>'}
+    </section>
+  `;
+}
+
+/**
+ * Escape HTML so ERPNext data can't inject markup
+ */
+function esc(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 /**

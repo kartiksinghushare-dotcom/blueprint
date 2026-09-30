@@ -743,3 +743,24 @@ details.set > summary b {
     transition: none;
   }
 }
+
+/* Data lists rendered by app.js (items, stock entries) */
+.card h2 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0 0 8px;
+  letter-spacing: -0.01em;
+}
+
+table.grid th,
+table.grid td {
+  text-align: left;
+}
+
+table.grid td {
+  white-space: normal;
+}
+
+.card + .card {
+  margin-top: 12px;
+}
