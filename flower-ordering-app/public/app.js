@@ -10,19 +10,21 @@ const config = {
   apiUrl: '/api/frappe-proxy',
 };
 
-// Initialize app on DOM ready
-document.addEventListener('DOMContentLoaded', () => {
-  console.log('Flower Ordering App initializing...');
+// Initialize app - runs immediately if DOM is already ready (Next.js loads this
+// after page load, so DOMContentLoaded has usually already fired)
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initializeApp);
+} else {
   initializeApp();
-});
+}
 
 /**
  * Initialize the application
  */
 async function initializeApp() {
   try {
-    // Create main container
-    const container = document.body;
+    // Render into the app root (not document.body, which would wipe Next.js's own root)
+    const container = document.getElementById('app-root') || document.body;
     container.innerHTML = `
       <div class="wrap">
         <header class="top">
